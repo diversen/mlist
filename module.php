@@ -101,22 +101,30 @@ class module {
         }
         
         $id = direct::fragment(2);
-        echo html::getHeadline('Send mail to list', 'h2');
+        echo html::getHeadline(lang::translate('Send mail to list'), 'h2');
         echo $this->viewOptions($id);
         $this->formSendToList();
-        if (isset($_POST['list'])) {
-            $this->addListTasks($id, $_POST['list']);
-            http::locationHeader("/mlist/list/$id", lang::translate('List has been added to queue'));
+        if (isset($_POST['list']) && $_POST['list'] != 0) {
+            $res = $this->addMailToQueue($id, $_POST['list']);
+            if ($res) {
+                http::locationHeader("/mlist/list/$id", lang::translate('List has been added to queue'));
+            } else {
+                echo html::getError(lang::translate('Something went wrong . TRy again'));
+            }
         }
     }
     
     /**
-     * 
+     * Updates status flag on an email to indicate that it should be sent
      * @param int $id the email id
      * @param int $list the $list id
      */
-    public function addListTasks($id, $list) {
-        echo $id; echo $list; die;
+    public function addMailToQueue($id, $list) {
+        R::begin();
+        $b = rb::getBean($this->table, 'id', $id);
+        $b->status = 1;
+        R::store($b);
+        return R::commit();
     }
     
     /**
@@ -233,11 +241,11 @@ class module {
      */
     public function viewOptions($id) {
         $str = '<ul class="uk-subnav">';
-        $str.= '<li>' . html::createLink("/mlist/send/$id", lang::translate('Send single email')) . '</li>';
-        $str.= '<li>' . html::createLink("/mlist/list/$id", lang::translate('Send to list')) . '</li>';
         $str.= '<li>' . html::createLink("/mlist/view/$id", lang::translate('View')) . '</li>';
         $str.= '<li>' . html::createLink("/mlist/edit/$id", lang::translate('Edit')) . '</li>';
         $str.= '<li>' . html::createLink("/mlist/delete/$id", lang::translate('Delete')) . '</li>';
+        $str.= '<li>' . html::createLink("/mlist/send/$id", lang::translate('Send single email')) . '</li>';
+        $str.= '<li>' . html::createLink("/mlist/list/$id", lang::translate('Send to list')) . '</li>';
         $str.= '</ul>';
         return $str; 
     }
@@ -257,8 +265,7 @@ class module {
         }
         
         $id = direct::fragment(2);
-        if (isset($_POST['delete'])) {
-            
+        if (isset($_POST['delete'])) {        
             $bean = rb::getBean($this->table, 'id', $id);
             R::trash($bean);
             http::locationHeader('/mlist/index');

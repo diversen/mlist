@@ -15,19 +15,19 @@ class menu {
         $ary = [];
 
         $ary[] = array(
-            'title' => lang::translate('Overview', null, array('no_translate' => true)),
+            'title' => lang::translate('Overview'),
             'url' => '/mlist/index',
             'auth' => 'admin'
         );
         
         $ary[] = array(
-            'title' => lang::translate('Create new email', null, array('no_translate' => true)),
+            'title' => lang::translate('Create new email'),
             'url' => '/mlist/create',
             'auth' => 'admin'
         );
 
         $ary[] = array(
-            'title' => lang::translate('Mailing lists', null, array('no_translate' => true)),
+            'title' => lang::translate('Mailing lists'),
             'url' => '/mlist/lists',
             'auth' => 'admin'
         );
