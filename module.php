@@ -3,12 +3,12 @@
 namespace modules\mlist;
 
 use diversen\conf;
+use diversen\lang;
 use diversen\date;
 use diversen\db\q;
 use diversen\db\rb;
 use diversen\html;
 use diversen\http;
-use diversen\log;
 use diversen\mailsmtp;
 use diversen\moduleloader;
 use diversen\pagination;
@@ -19,17 +19,7 @@ use Michelf\MarkdownExtra;
 use R;
 
 /**
- * You will need to install dependencies. `simple-php-classes` does 
- * not automaticaly installs dependencies. In order to uses the mail
- * wrapper, do a: 
- * 
- *     composer require michelf/php-markdown
- * 
- * and in order to install phpmailer: 
- * 
- *     composer require phpmailer/phpmailer
- * 
- * @return type
+ * Simple mailing list
  */
 class module {
 
@@ -40,6 +30,10 @@ class module {
         rb::connectExisting();
     }
     
+    /**
+     * Check access. Only allowed for admin users
+     * @return boolean $res true if access is granted, else false
+     */
     public function checkAccess () {
         if (!session::isAdmin()) {
             moduleloader::setStatus(403);
@@ -47,18 +41,20 @@ class module {
         }
         return true;
     }
+    
     /**
      * Get HTML template for email
+     * @return string $html
      */
     public function getHtmlTemplate() {
-        // Get email template
         $email = file_get_contents(conf::pathModules() . '/mlist/templates/template.html');
         return $email;
     }
 
     /**
      * Generates txt version from markdown, and returns the txt version
-     * @return id $id the mail id
+     * @param int $id mail id
+     * @return string $txt the text version of the mail
      */
     public function getEmailTxt($id) {
         
@@ -79,22 +75,25 @@ class module {
 
     
     /**
-     * View send email form
+     * Form for sending an email
      */
     public function formSendMail() {
 
         // Draw form
         $f = new html();
         $f->formStart();
-        $f->legend('Send mail');
-        $f->label('to', 'To');
+        $f->legend(lang::translate('Send mail'));
+        $f->label('to', lang::translate('To'));
         $f->text('to');
-        $f->submit('send', 'Send mail');
+        $f->submit('send', lang::translate('Send mail'));
         $f->formEnd();
         echo $f->getStr();
     }
     
-        
+    /**
+     * /mlist/list/ action Send an email to a list
+     * @return void
+     */
     public function listAction () {
         
         if (!$this->checkAccess()) {
@@ -107,68 +106,27 @@ class module {
         $this->formSendToList();
         if (isset($_POST['list'])) {
             $this->addListTasks($id, $_POST['list']);
-            http::locationHeader("/mlist/list/$id", 'List has been added to queue');
+            http::locationHeader("/mlist/list/$id", lang::translate('List has been added to queue'));
         }
     }
-    /*
-            
-        $html = $this->getEmailHtml($id);
-        $txt = $this->getEmailTxt($id);
-        
-        // if (isset($_POST['send'])) {
-        $files = [];
-        if (!empty($mail->exports)) {
-            $files[] = $this->getPdf($id);
-            $files[] = $this->getDocx($id);
-        }
-        
-        
-        $res = mailsmtp::mail($_POST['to'], $mail->subject, $txt, $html, $files);
-        if ($res) {
-            $this->generateReport($_POST['to'], $bean);
-            http::locationHeader("/mlist/send/$id", "Mail was sent");
-        }
-        //}
-     * 
-     */
     
-    public function addListTasks($id, $list) {
-        echo $id;
-        echo $list;
-        die;
-        
-        // get mail
-        $mail = rb::getBean($this->table, 'id', $id);
-        
-        // get list members
-        $rows = q::select('members')->filter('list =', $list)->fetch();
-
-        $client = new GearmanClient();
-        $client->addServer();
-
-        $i = 0;
-
-        // Add tasks
-        $results = array();
-        foreach ($rows as $row) {
-
-            $client->addTaskBackground("send_mail", json_encode($row), $results, $row['id']);
-            log::debug("Adding job $i with the row id = $row[id]");
-            $i++;
-        }
-
-        // Run tasks
-        $client->runTasks();
-    }
-
     /**
-     * View send email form
+     * 
+     * @param int $id the email id
+     * @param int $list the $list id
+     */
+    public function addListTasks($id, $list) {
+        echo $id; echo $list; die;
+    }
+    
+    /**
+     * View form send email to list
      */
     public function formSendToList() {
 
         $rows = q::select('list')->fetch();
         $ary = array ();
-        $ary[0] = 'Select maliling-list';
+        $ary[0] = 'Select mailling-list';
         foreach ($rows as $row) {
             $ary[$row['id']] = $row['title'];
         }
@@ -177,39 +135,38 @@ class module {
         $f->init(array(), 'send');
         $f->formStart();
         
-        $f->legend('Send mail to list');
+        $f->legend(lang::translate('Send to list'));
         
         $f->selectAry('list', $ary);
         $f->label('send', '');
-        $f->submit('send', 'Send mail to list');
+        $f->submit('send', lang::translate('Send mail to mailing-list'));
         $f->formEnd();
         echo $f->getStr();
     }
     
     /**
-     * View compsoe email form
+     * View composoe email form
      * @param array $ary values to preload the form with
      */
     public function formMail ($ary = array ()) {
 
-        
         $f = new html();
         $f->init($ary, 'send', true);
         $f->setAutoEncode(true);
         $f->formStart();
 
-        $f->legend('Send or create email');
+        $f->legend(lang::translate('Edit email'));
         
-        $f->label('subject', 'Subject');
+        $f->label('subject', lang::translate('Subject'));
         $f->text('subject');
         
-        $f->label('exports', 'Generate exports');
+        $f->label('exports', lang::translate('Generate exports'));
         $f->checkbox('exports');
         
-        $f->label('email', 'Content (Markdown)');
+        $f->label('email', lang::translate('Write in markdown'));
         $f->textarea('email', null, array ( 'class' => 'markdown', 'data-uk-htmleditor' => "{mode:'split', maxsplitsize:600, markdown:true}"));
 
-        $f->submit('send', 'Save');
+        $f->submit('send', lang::translate('Save'));
         $f->formEnd();
         $str = $f->getStr();
         
@@ -234,15 +191,14 @@ class module {
         $res = rb::commitBean($bean);
         if ($res) {
             $localtion = "/mlist/edit/$res";
-            http::locationHeader($localtion, 'Mail was created');
+            http::locationHeader($localtion, lang::translate('Mail was created'));
         } else {
             die('Could not create mail');
         }
-        
     }
     
     /**
-     * / index action
+     * / index action Display all emails
      */
     public function indexAction () {
         
@@ -255,15 +211,15 @@ class module {
         $p = new pagination($num_rows, $per_page);
         
         $rows = q::select('mail')->order('created', 'DESC')->limit($p->from, $per_page)->fetch();
-        $this->viewMailRows($rows);
+        $this->viewEmailsOverview($rows);
         echo $p->echoPagerHTML(); 
     }
     
     /**
-     * View mail rows 
+     * View email rows 
      * @param array $rows the rows to display
      */
-    public function viewMailRows ($rows) {
+    public function viewEmailsOverview ($rows) {
         foreach ($rows as $row) {
             echo html::getHeadline($row['subject'], 'h2');
             echo $this->viewOptions($row['id']);
@@ -272,19 +228,18 @@ class module {
     
     /**
      * View mail options
-     * @param array $row
+     * @param int $id
      * @return string $html
      */
     public function viewOptions($id) {
         $str = '<ul class="uk-subnav">';
-        $str.= '<li>' . html::createLink("/mlist/send/$id", 'Send single') . '</li>';
-        $str.= '<li>' . html::createLink("/mlist/list/$id", 'Send to list') . '</li>';
-        $str.= '<li>' . html::createLink("/mlist/view/$id", 'View') . '</li>';
-        $str.= '<li>' . html::createLink("/mlist/edit/$id", 'Edit') . '</li>';
-        $str.= '<li>' . html::createLink("/mlist/delete/$id", 'Delete') . '</li>';
+        $str.= '<li>' . html::createLink("/mlist/send/$id", lang::translate('Send single email')) . '</li>';
+        $str.= '<li>' . html::createLink("/mlist/list/$id", lang::translate('Send to list')) . '</li>';
+        $str.= '<li>' . html::createLink("/mlist/view/$id", lang::translate('View')) . '</li>';
+        $str.= '<li>' . html::createLink("/mlist/edit/$id", lang::translate('Edit')) . '</li>';
+        $str.= '<li>' . html::createLink("/mlist/delete/$id", lang::translate('Delete')) . '</li>';
         $str.= '</ul>';
-        return $str;
-        
+        return $str; 
     }
     
     /**
@@ -293,7 +248,7 @@ class module {
     public $table = 'mail';
     
     /**
-     * /delete delete action
+     * /mlist/delete action
      */
     public function deleteAction () {
         
@@ -309,19 +264,19 @@ class module {
             http::locationHeader('/mlist/index');
         }
         
-        echo html::getHeadline('Delete mail', 'h2');
+        echo html::getHeadline(lang::translate('Delete mail'), 'h2');
         echo $this->viewOptions($id);
         
         $f = new html();
         $f->formStart();
-        $f->legend('Delete mail');
-        $f->submit('delete', 'Delete');
+        $f->legend(lang::translate('Delete mail'));
+        $f->submit('delete', lang::translate('Delete'));
         $f->formEnd();
         echo $f->getStr();
     }
     
     /**
-     * Get HTML mail from ID
+     * Get HTML mail part from ID
      * @param int $id
      * @return string $html
      */
@@ -337,7 +292,7 @@ class module {
     }
     
     /**
-     * /view View HTML mail action 
+     * /mlist/view View HTML mail action 
      */
     public function viewAction () {
         
@@ -352,7 +307,7 @@ class module {
     
         
     /**
-     * /txt View txt version
+     * /mlist/txt get txt version of email
      */
     public function txtAction () {
         
@@ -407,7 +362,8 @@ class module {
     }
     
     /**
-     * /send Send action
+     * Action that sends a test email to a single user
+     * /mlist/send Send action
      */
     public function sendAction () {
         
@@ -431,30 +387,36 @@ class module {
             $res = mailsmtp::mail($_POST['to'], $bean->subject, $txt, $html, $files);
             if ($res) {
                 $this->generateReport($_POST['to'], $bean);
-                http::locationHeader("/mlist/send/$id", "Mail was sent");
+                http::locationHeader("/mlist/send/$id", lang::translate("Mail was sent"));
             }
         }
 
-        echo html::getHeadline('Send single email', 'h2');
+        echo html::getHeadline(lang::translate('Send single email'), 'h2');
         echo $this->viewOptions($id);
         $this->formSendMail();
         $this->viewReport($id);
         
     }
     
+    /**
+     * A form for creating a mailing list
+     */
     public function formCreateList () {
         
         $f = new html();
-        // $f->init(array(), null, true);
         $f->formStart();
-        
-        $f->legend('Create list');
+        $f->legend(lang::translate('Create list'));
         $f->text('list');
-        $f->submit('create', 'Create new list');
+        $f->submit('create', lang::translate('Create new list'));
         $f->formEnd();
         echo $f->getStr();
     }
     
+    /**
+     * Display all lists
+     * /mlist/lists action 
+     * @return void
+     */
     public function listsAction () {
         
         if (!$this->checkAccess()) {
@@ -466,15 +428,20 @@ class module {
             $bean->title = $_POST['list'];
             $bean->date = date::getDateNow(array('hms' => true));
             R::store($bean);
-            http::locationHeader('/mlist/lists', 'List was created');
+            http::locationHeader('/mlist/lists', lang::translate('List was created'));
         }
         
-        echo html::getHeadline('Create list', 'h2');
+        echo html::getHeadline(lang::translate('Create list'), 'h2');
         $this->formCreateList();
         $this->viewLists();
 
     }
     
+    /**
+     * Edit members connected to a list
+     * /mlist/members
+     * @return void
+     */
     public function membersAction () {
         
         if (!$this->checkAccess()) {
@@ -485,8 +452,8 @@ class module {
         $row = q::select('list')->filter('id =', $id)->fetchSingle();
         $row = html::specialEncode($row);
         
-        echo html::getHeadline("Edit list: $row[title]", 'h2');
-        echo html::createLink('/mlist/lists', "Go back to lists");
+        echo html::getHeadline(lang::translate("Edit list") . MENU_SUB_SEPARATOR_SEC .  $row[title], 'h2');
+        echo html::createLink('/mlist/lists', lang::translate("Go back to lists"));
         $this->formListAdd($id);
         
         if (isset($_POST['add'])) {
@@ -494,6 +461,9 @@ class module {
         }
     }
     
+    /**
+     * Update members. Based on POST
+     */
     public function updateMembers() {
 
         $members = explode(PHP_EOL, $_POST['members']);
@@ -509,10 +479,13 @@ class module {
                 R::store($bean);
             }
         }
-        http::locationHeader("/mlist/members/$_POST[id]", "List was updated");
-
+        http::locationHeader("/mlist/members/$_POST[id]", lang::translate("List was updated"));
     }
 
+    /**
+     * Form that displays members connected to a list
+     * @param int $id list id
+     */
     public function formListAdd ($id) {
         $rows = q::select('members')->filter('list =', $id)->fetch();
         $str = '';
@@ -521,12 +494,11 @@ class module {
         }
 
         $f = new html();
-
         $f->formStart();
-        $f->legend('Add emails to list. New emails on newline');
+        $f->legend(lang::translate('Add emails to list. New emails after a newline'));
         $f->hidden('id', $id);
         $f->textarea('members', $str, array ('cols' => '80'));
-        $f->submit('add', 'Add');
+        $f->submit('add', lang::translate('Update members'));
         $f->formEnd();
         echo $f->getStr();
     }
@@ -540,44 +512,58 @@ class module {
             echo html::getHeadline("$row[title]</b> ($row[date])<br />", "h4");
             
             $ary = [];
-            $ary[] = array ('url' => "/mlist/members/$row[id]", 'title' => 'Edit list');
-            $ary[] = array ('url' => "/mlist/deletelist/$row[id]", 'title' => 'Delete list');
+            $ary[] = array (
+                'url' => "/mlist/members/$row[id]", 
+                'title' => lang::translate('Edit list'));
+            $ary[] = array (
+                'url' => "/mlist/deletelist/$row[id]", 
+                'title' => lang::translate('Delete list'));
+            
             $str = '<ul class="uk-subnav">';
             $str.= $m->getSubNav($ary);
             $str.= '</ul>';
             echo $str;
-            
             echo "<hr />";
         }
     }
     
+    /**
+     * Delete list action
+     * /mlist/deletelist action
+     * @return type
+     */
     public function deletelistAction () {
         
         if (!$this->checkAccess()) {
             return;
         }
         
-        echo html::getHeadline('Delete list', 'h2');
+        echo html::getHeadline(lang::translate('Delete list'), 'h2');
         
         $id = direct::fragment(2);
         $f = new html();
         $f->formStart();
-        $f->legend('Delete list');
-        $f->submit('delete', 'Delete');
+        $f->legend(lang::translate('Delete list'));
+        $f->submit('delete', lang::translate('Delete'));
         $f->formEnd();
         echo $f->getStr();
         
         if (isset($_POST['delete'])) {
             $this->deleteList();
-            http::locationHeader('/mlist/lists', 'List has been deleted');
+            http::locationHeader('/mlist/lists', lang::translate('List has been deleted'));
         }
     }
     
+    /**
+     * Delete a list
+     * @return type
+     */
     private function deleteList () {
         $id = direct::fragment(2);
+        q::begin();
         q::delete('list')->filter('id =', $id)->exec();
         q::delete('members')->filter('list =', $id)->exec();
-        return;
+        return q::commit();
     }
 
     
@@ -587,7 +573,7 @@ class module {
      */
     public function viewReport($id) {
         $rows = q::select('report')->filter('parent =', $id)->fetch();
-        echo html::getHeadline("This email has been sent to", 'h2');
+        echo html::getHeadline(lang::translate("This email has been sent to"), 'h2');
         foreach($rows as $row) {
 
             echo $row['to'];
@@ -596,8 +582,8 @@ class module {
     }
     
     /**
-     * 
-     * @param string $email the email 
+     * Generate a report on user mail the mail id
+     * @param string $email the email
      * @param object $bean the mail bean object
      */
     public function generateReport($email, $bean) {
@@ -605,7 +591,6 @@ class module {
         $report->to = $email;
         $report->parent = $bean->id;
         R::store($report);
-        
     }
     
     /**
@@ -620,15 +605,11 @@ class module {
         $id = direct::fragment(2);
         
         http::prg();
-        
-        //include_once "templates/jquery-markedit/common.php";
-        // jquery_markedit_load_assets();
 
         $ary = q::select($this->table)->filter('id =', $id)->fetchSingle();
 
         if (isset($_POST['send'])){
-
-            //$this->validateMail();    
+   
             if (!empty($this->errors)) {
                 echo html::getErrors($this->errors);
             } else {
@@ -643,13 +624,13 @@ class module {
 
                 $res = rb::updateBean($this->table, $id, $values);
                 if ($res) {
-                    session::setActionMessage('Mail was saved');
+                    session::setActionMessage(lang::translate('Mail has been saved'));
                     http::locationHeader("/mlist/edit/$id");
                 } 
             }   
         }
         
-        echo html::getHeadline('Edit mail', 'h2');
+        echo html::getHeadline(lang::translate('Edit mail'), 'h2');
         echo $this->viewOptions($id);
         $this->formMail($ary);
 
@@ -671,37 +652,3 @@ class module {
         return true;
     }
 }
-
-/**
- * // add tasks
- $client = new GearmanClient();
-    $client->addServer();
-    
-    $i= 0;
-    
-    $results = array();
-    foreach ($rows as $row) {
-        
-        $client->addTaskBackground("jobs_spider_job", json_encode($row), $results, $row['id']);
-        log::debug("Adding job $i with the row id = $row[id]");
-        $i++;
-    }
-    
-    $client->runTasks();
- * 
- * 
- * 
-  // run
- * $worker = new GearmanWorker();
-    $worker->addServer(); 
-
-    $worker->addFunction("jobs_spider_job", function(GearmanJob $job) {
-        $row = (array)json_decode($job->workload());
-
-        jobs_spider_job($row);
-    });
-
-    while (1) {
-        $worker->work();
-    }
- */

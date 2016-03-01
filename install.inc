@@ -1,8 +1,7 @@
 <?php
 
-// ,
+// Main menu item
 use diversen\lang;
-
 
 $_INSTALL['MAIN_MENU_ITEMS'] = array ();
 $_INSTALL['MAIN_MENU_ITEMS'][] = array (
@@ -11,6 +10,4 @@ $_INSTALL['MAIN_MENU_ITEMS'][] = array (
     'module_name' => 'mlist',
     'weight' => 100,
     'auth' => 'admin',
-
-
 );
