@@ -452,7 +452,7 @@ class module {
         $row = q::select('list')->filter('id =', $id)->fetchSingle();
         $row = html::specialEncode($row);
         
-        echo html::getHeadline(lang::translate("Edit list") . MENU_SUB_SEPARATOR_SEC .  $row[title], 'h2');
+        echo html::getHeadline(lang::translate("Edit list") . MENU_SUB_SEPARATOR_SEC .  $row['title'], 'h2');
         echo html::createLink('/mlist/lists', lang::translate("Go back to lists"));
         $this->formListAdd($id);
         
