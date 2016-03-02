@@ -3,12 +3,13 @@
 namespace modules\mlist;
 
 use diversen\conf;
-use diversen\lang;
 use diversen\date;
 use diversen\db\q;
 use diversen\db\rb;
 use diversen\html;
+use diversen\html\helpers;
 use diversen\http;
+use diversen\lang;
 use diversen\mailsmtp;
 use diversen\moduleloader;
 use diversen\pagination;
@@ -99,9 +100,18 @@ class module {
         if (!$this->checkAccess()) {
             return;
         }
+
+        
         
         $id = direct::fragment(2);
         
+        if (isset($_POST['delete_queue'])) {
+            $res = q::delete('listqueue')->filter('mail =', $id)->exec();
+            if ($res) {
+                http::locationHeader("/mlist/list/$id", lang::translate('Mail has been deleted from queue'));
+            }
+        }
+       
         if (isset($_POST['list']) && $_POST['list'] != 0) {
             $res = $this->addMailToQueue($id, $_POST['list']);
             if ($res) {
@@ -112,8 +122,63 @@ class module {
         }
         echo html::getHeadline(lang::translate('Send mail to list'), 'h2');
         echo $this->viewOptions($id);
-        $this->formSendToList();
         
+        $row = q::select('listqueue')->filter('mail =', $id)->fetchSingle();
+        if (!empty($row)) {
+            
+            $list = $this->getList($row['list']);
+            
+            if ($row['status'] == 0) {
+                echo lang::translate('This mail is in queue and will be sent to: ') . 
+                    html::specialEncode($list['title']);
+            }
+            if ($row['status'] == 2) {
+                echo lang::translate('This mail has been sent to: ') . 
+                    html::specialEncode($list['title']);
+            }
+            echo helpers::confirmDeleteForm(
+                    'delete_queue', 
+                    lang::translate('Delete from queue'));
+        } else {
+            $this->formSendToList();
+        }
+        $this->displayCurrentSendToList();
+        
+    }
+    
+    /**
+     * Display send to lists based on 'status'
+     * @param int $status (2 = has been sent)
+     */
+    public function displayCurrentSendToList ($status = 2) {
+        $q = "SELECT * FROM listqueue WHERE status = $status ORDER BY date DESC";
+        $rows = q::query($q)->fetch();
+        
+        foreach ($rows as $row) {
+            $this->displaySingleSendList($row);
+        }
+    }
+    
+    public function getList ($id) {
+        return q::select('list')->
+                filter('id =', $id)->
+                fetchSingle();
+    }
+    
+    public function displaySingleSendList ($row) {
+        return '';
+        $mail = $this->getMail($row['mail']);
+        
+        //print_r($mail);
+        $list = $this->getList($row['list']);
+        //print_r($list);
+        
+        html::specialEncode($mail);
+        
+        echo $mail['subject'];
+        //echo $list['title'];
+
+
     }
     
     /**
@@ -256,12 +321,18 @@ class module {
      * @return string $html
      */
     public function viewOptions($id) {
+        
+        $mail = $this->getMail($id);
+        $title = html::specialEncode($mail['subject']);
+        
         $str = '<ul class="uk-subnav">';
+        
         $str.= '<li>' . html::createLink("/mlist/view/$id", lang::translate('View')) . '</li>';
         $str.= '<li>' . html::createLink("/mlist/edit/$id", lang::translate('Edit')) . '</li>';
         $str.= '<li>' . html::createLink("/mlist/delete/$id", lang::translate('Delete')) . '</li>';
         $str.= '<li>' . html::createLink("/mlist/send/$id", lang::translate('Send single email')) . '</li>';
         $str.= '<li>' . html::createLink("/mlist/list/$id", lang::translate('Send to list')) . '</li>';
+        $str.= '<li><b>(' . $title . ')</b></li>';
         $str.= '</ul>';
         return $str; 
     }
@@ -281,9 +352,11 @@ class module {
         }
         
         $id = direct::fragment(2);
-        if (isset($_POST['delete'])) {        
-            $bean = rb::getBean($this->table, 'id', $id);
-            R::trash($bean);
+        if (isset($_POST['delete'])) {
+            q::begin();
+            q::delete('mail')->filter('id =', $id)->exec();
+            q::delete('listqueue')->filter('mail =', $id)->exec();
+            q::commit();
             http::locationHeader('/mlist/index');
         }
         
@@ -477,7 +550,7 @@ class module {
         $row = html::specialEncode($row);
         
         echo html::getHeadline(lang::translate("Edit list") . MENU_SUB_SEPARATOR_SEC .  $row['title'], 'h2');
-        echo html::createLink('/mlist/lists', lang::translate("Go back to lists"));
+
         $this->formListAdd($id);
         
         if (isset($_POST['add'])) {
@@ -555,8 +628,12 @@ class module {
 
         $f = new html();
         $f->formStart();
-        $f->legend(lang::translate('Add emails to list. New emails after a newline'));
+
         $f->hidden('id', $id);
+        
+        $f->label('title', lang::translate('The name of the list'));;
+        $f->text('title');
+        $f->label('members',lang::translate('Add emails to list. New emails after a newline'));
         $f->textarea('members', $str, array ('cols' => '80'));
         $f->submit('add', lang::translate('Update members'));
         $f->formEnd();
@@ -690,7 +767,6 @@ class module {
                 if (isset($_POST['exports'])) {
                     $values['exports'] = 1;
                 } 
-
 
                 $res = rb::updateBean($this->table, $id, $values);
                 if ($res) {
