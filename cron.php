@@ -15,11 +15,9 @@ class cron extends module {
 
         $this->setFrom();
         $cron = conf::getModuleIni('mlist_cron');
-        
-        
+
         $minute = CronExpression::factory($cron);
         if ($minute->isDue()) {    
-            die('ok');
             $this->sendMails();
         }
     }
