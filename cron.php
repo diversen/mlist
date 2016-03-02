@@ -4,6 +4,7 @@ namespace modules\mlist;
 
 use diversen\log;
 use diversen\mailsmtp;
+use diversen\conf;
 use Exception;
 use Cron\CronExpression;
 use modules\mlist\module;
@@ -45,7 +46,9 @@ class cron extends module {
             } catch (Exception $e) {
                 log::error($e->getMessage());
             }
-            sleep(15);
+            $sleep = conf::getModuleIni('mlist_sleep');
+            sleep($sleep);
+            
         }
     }
     
