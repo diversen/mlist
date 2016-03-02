@@ -101,28 +101,44 @@ class module {
         }
         
         $id = direct::fragment(2);
-        echo html::getHeadline(lang::translate('Send mail to list'), 'h2');
-        echo $this->viewOptions($id);
-        $this->formSendToList();
+        
         if (isset($_POST['list']) && $_POST['list'] != 0) {
             $res = $this->addMailToQueue($id, $_POST['list']);
             if ($res) {
                 http::locationHeader("/mlist/list/$id", lang::translate('List has been added to queue'));
             } else {
-                echo html::getError(lang::translate('Something went wrong . TRy again'));
+                echo html::getErrors($this->errors);
             }
         }
+        echo html::getHeadline(lang::translate('Send mail to list'), 'h2');
+        echo $this->viewOptions($id);
+        $this->formSendToList();
+        
     }
     
     /**
      * Updates status flag on an email to indicate that it should be sent
-     * @param int $id the email id
-     * @param int $list the $list id
+     * @param int $mail_id the email id
+     * @param int $list_id the $list id
      */
-    public function addMailToQueue($id, $list) {
+    public function addMailToQueue($mail_id, $list_id) {
+        
+        $row = q::select('listqueue')->
+                filter('list =', $list_id)->condition('AND')->
+                filter('mail =', $mail_id)->
+                fetchSingle();
+        
+        if (!empty($row)) {
+            $this->errors[] = lang::translate('Mail is already added to the queue');
+
+            return false;
+        }
+        
         R::begin();
-        $b = rb::getBean($this->table, 'id', $id);
-        $b->status = 1;
+        $b = rb::getBean('listqueue');
+        $b->status = 0;
+        $b->list = $list_id;
+        $b->mail = $mail_id;
         R::store($b);
         return R::commit();
     }
@@ -379,7 +395,7 @@ class module {
         }
         
         $id = direct::fragment(2);
-        $bean = rb::getBean($this->table, 'id', $id);
+        $bean = rb::getBean('mail', 'id', $id);
         
         $html = $this->getEmailHtml($id);
         $txt = $this->getEmailTxt($id);
@@ -393,8 +409,9 @@ class module {
 
             $res = mailsmtp::mail($_POST['to'], $bean->subject, $txt, $html, $files);
             if ($res) {
-                $this->generateReport($_POST['to'], $bean);
                 http::locationHeader("/mlist/send/$id", lang::translate("Mail was sent"));
+            } else {
+                $this->errors[] = lang::translate('System could not send email');
             }
         }
 
@@ -475,6 +492,7 @@ class module {
 
         $members = explode(PHP_EOL, $_POST['members']);
 
+
         R::begin();
         q::delete('members')->filter('list =', $_POST['id'])->exec();
         foreach ($members as $member) {
@@ -486,7 +504,42 @@ class module {
                 R::store($bean);
             }
         }
+        R::commit();
         http::locationHeader("/mlist/members/$_POST[id]", lang::translate("List was updated"));
+    }
+    
+    /**
+     * Get all list members from list id
+     * @param int $list_id
+     * @return array $rows members
+     */
+    public function getListMembers ($list_id) {
+        return q::select('members')->filter('list =', $list_id)->fetch();
+    }
+    
+    /**
+     * Get all mails that have to be sent
+     * @return array $rows mails
+     */
+    public function getMailsDueToSend () {
+        $rows = q::select('listqueue')->filter('status =', 0)->fetch();
+        R::begin();
+        foreach($rows as $row) {
+            $bean = rb::getBean('listqueue', 'id', $row['id']);
+            $bean->status = 2;
+            R::store($bean);
+        }
+        R::commit();
+        return $rows;
+    }
+    
+    /**
+     * Get a mail from a mail id
+     * @param type $id
+     * @return type
+     */
+    public function getMail($id) {
+        return q::select('mail')->filter('id =', $id)->fetchSingle();
     }
 
     /**
@@ -593,10 +646,17 @@ class module {
      * @param string $email the email
      * @param object $bean the mail bean object
      */
-    public function generateReport($email, $bean) {
+    public function generateReport($email, $mail_id, $status) {
+        if (!$status) {
+            $status = 0;
+        } else {
+            $status = 1;
+        }
+        
         $report = R::dispense('report');
         $report->to = $email;
-        $report->parent = $bean->id;
+        $report->parent = $mail_id;
+        $report->status = $status;
         R::store($report);
     }
     

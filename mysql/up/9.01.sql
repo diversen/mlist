@@ -26,6 +26,7 @@ CREATE TABLE `mail` (
 CREATE TABLE `report` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `to` text,
+  `status` int(2) DEFAULT 0,
   `parent` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
