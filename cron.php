@@ -13,12 +13,27 @@ class cron extends module {
     
     public function run() {
 
+        $this->setFrom();
+        
         $minute = CronExpression::factory('* * * * *');
-        if ($minute->isDue()) {
-            
+        if ($minute->isDue()) {    
             $this->sendMails();
-            
-            
+        }
+    }
+    
+    /**
+     * Set from and name according to module ini settings
+     */
+    public function setFrom () {
+        $from = conf::getModuleIni('mlist_from');
+        $name = conf::getModuleIni('mlist_name');
+        
+        if ($from) {
+            conf::setMainIni('smtp_params_email', $from);
+        }
+        
+        if ($name) {
+            conf::setMainIni('smtp_params_name', $name);
         }
     }
     

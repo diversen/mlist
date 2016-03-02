@@ -1,0 +1,3 @@
+mlist_sleep = 15
+mlist_from = 'example@test.com'
+mlist_name = 'My fine name'

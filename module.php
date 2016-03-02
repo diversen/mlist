@@ -686,7 +686,10 @@ class module {
                 $values = array ();
                 $values['subject'] = $_POST['subject'];
                 $values['email'] = $_POST['email'];
-                $values['exports'] = $_POST['exports'];
+                
+                if (isset($_POST['exports'])) {
+                    $values['exports'] = 1;
+                } 
 
 
                 $res = rb::updateBean($this->table, $id, $values);
