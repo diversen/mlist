@@ -563,8 +563,10 @@ class module {
      */
     public function updateMembers() {
 
+        $title = html::specialDecode($_POST['title']);
+        
+        q::update('list')->values(array ('title' => $title))->filter('id =', $_POST['id'])->exec();
         $members = explode(PHP_EOL, $_POST['members']);
-
 
         R::begin();
         q::delete('members')->filter('list =', $_POST['id'])->exec();
@@ -625,6 +627,9 @@ class module {
         foreach($rows as $row) {
             $str.= $row['email'] . PHP_EOL;
         }
+        
+        $list = $this->getList($id);
+
 
         $f = new html();
         $f->formStart();
@@ -632,7 +637,7 @@ class module {
         $f->hidden('id', $id);
         
         $f->label('title', lang::translate('The name of the list'));;
-        $f->text('title');
+        $f->text('title', html::specialEncode($list['title']));
         $f->label('members',lang::translate('Add emails to list. New emails after a newline'));
         $f->textarea('members', $str, array ('cols' => '80'));
         $f->submit('add', lang::translate('Update members'));
@@ -643,6 +648,8 @@ class module {
     
     public function viewLists () {        
         $rows = q::select('list')->fetch();
+        
+        $rows = html::specialEncode($rows);
         
         $m = new menu();
         foreach($rows as $row) {
