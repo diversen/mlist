@@ -310,7 +310,7 @@ class module {
      */
     public function viewEmailsOverview ($rows) {
         foreach ($rows as $row) {
-            echo html::getHeadline($row['subject'], 'h2');
+            echo html::getHeadline(html::specialEncode($row['subject']), 'h2');
             echo $this->viewOptions($row['id']);
         }
     }
@@ -546,6 +546,11 @@ class module {
         }
         
         $id = direct::fragment(2);
+        
+        if (isset($_POST['add'])) {
+            $this->updateMembers();
+        }
+        
         $row = q::select('list')->filter('id =', $id)->fetchSingle();
         $row = html::specialEncode($row);
         
@@ -553,9 +558,7 @@ class module {
 
         $this->formListAdd($id);
         
-        if (isset($_POST['add'])) {
-            $this->updateMembers();
-        }
+        
     }
     
     /**
@@ -563,24 +566,71 @@ class module {
      */
     public function updateMembers() {
 
+        // Update title
         $title = html::specialDecode($_POST['title']);
-        
         q::update('list')->values(array ('title' => $title))->filter('id =', $_POST['id'])->exec();
-        $members = explode(PHP_EOL, $_POST['members']);
-
-        R::begin();
-        q::delete('members')->filter('list =', $_POST['id'])->exec();
-        foreach ($members as $member) {
+        
+        // Sanitize
+        $post_members = explode(PHP_EOL, $_POST['members']);
+        foreach($post_members as $key => $member) {
+            $post_members[$key] = trim($member);
+        }
+        
+        // Add members to DB that does not exists in DB
+        foreach ($post_members as $member) {
             $member = trim($member);
-            if ($this->validateMail($member)) {
-                $bean = R::dispense('members');
-                $bean->list = $_POST['id'];
-                $bean->email = $member;
-                R::store($bean);
+            if (!$this->memberExists($member)) {
+                $this->addMember($member);
+            } 
+        }
+        
+        // Get all members from DB
+        $db_members = q::select('members')->filter('list = ', $_POST['id'])->fetch();
+        $db_members = array_column($db_members, 'email');
+
+        // Remove members if they are not found in POST
+        foreach($db_members as $member) {
+            $member = trim($member);
+            if (!in_array($member, $post_members)) {
+                $this->deleteMember($member);
             }
         }
-        R::commit();
+
         http::locationHeader("/mlist/members/$_POST[id]", lang::translate("List was updated"));
+         
+    }
+    
+    /**
+     * Check if a member exists in a list
+     * @param string $member
+     * @return boolean $res
+     */
+    public function memberExists($member) {
+        $row = q::select('members')->filter('email =', $member)->condition('AND')->filter('list =', $_POST['id'])->fetchSingle();
+        if (empty($row)) {
+            return false;
+        }
+        return true;
+    }
+    
+    /**
+     * Add a member based on member email and _POST id
+     * @param string $member email
+     * @return boolean $res
+     */
+    public function addMember ($member) {
+        if ($this->validateMail($member)) {
+            return q::insert('members')->values(array('list' => $_POST['id'], 'email' => $member))->exec();
+        }
+    }
+    
+    /**
+     * Delete a member based on email and POST id
+     * @param string $member email
+     * @return boolean $res
+     */
+    public function deleteMember ($member) {
+        return q::delete('members')->filter('email =', $member)->condition('AND')->filter('list =', $_POST['id'])->exec();
     }
     
     /**
@@ -639,7 +689,7 @@ class module {
         $f->label('title', lang::translate('The name of the list'));;
         $f->text('title', html::specialEncode($list['title']));
         $f->label('members',lang::translate('Add emails to list. New emails after a newline'));
-        $f->textarea('members', $str, array ('cols' => '80'));
+        $f->textarea('members', trim($str), array ('cols' => '80'));
         $f->submit('add', lang::translate('Update members'));
         $f->formEnd();
         echo $f->getStr();
