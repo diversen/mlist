@@ -42,15 +42,7 @@ class module {
         }
         return true;
     }
-    
-    /**
-     * Get HTML template for email
-     * @return string $html
-     */
-    public function getHtmlTemplate() {
-        $email = file_get_contents(conf::pathModules() . '/mlist/templates/template.html');
-        return $email;
-    }
+
 
     /**
      * Generates txt version from markdown, and returns the txt version
@@ -378,13 +370,9 @@ class module {
      */
     public function getEmailHtml ($id) {
         
-        $bean = rb::getBean($this->table, 'id', $id);
-        $template = $this->getHtmlTemplate();
-        $email = "# " . $bean->subject . PHP_EOL . PHP_EOL . $bean->email;
-        $email = MarkdownExtra::defaultTransform($email);
-        $subject = html::specialEncode($bean->subject);
-        $str = str_replace(array('{title}', '{content}'), array ($subject, $email), $template);
-        return $str;
+        $bean = rb::getBean($this->table, 'id', $id);     
+        $helper = new \diversen\mailer\markdown();
+        return $helper->getEmailHtml($bean->subject, $bean->email);
     }
     
     /**
